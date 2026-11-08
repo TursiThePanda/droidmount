@@ -101,7 +101,23 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Helpers" "$APP/Contents/Resources"
 cp "$BUILD/bin/Droidmount" "$APP/Contents/MacOS/"
 cp "$BUILD/fs/simple-mtpfs" "$BUILD/bin/android-automount" "$BUILD/bin/fskit-probe" "$APP/Contents/Helpers/"
 sed "s/@VERSION@/$VERSION/g" "$ROOT/app/Info.plist" > "$APP/Contents/Info.plist"
-[[ -f "$ROOT/app/AppIcon.icns" ]] && cp "$ROOT/app/AppIcon.icns" "$APP/Contents/Resources/"
+# a build number that grows with every commit, so macOS re-reads the icon (it caches icons
+# per bundle id and version)
+BUILDNUM=$(git -C "$ROOT" rev-list --count HEAD 2>/dev/null || echo 0)
+/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $VERSION.$BUILDNUM" "$APP/Contents/Info.plist"
+# Icon: the layered Icon Composer icon (follows light/dark/clear/tinted) needs Xcode's
+# actool; without Xcode the plain light .icns is used.
+if xcrun --find actool >/dev/null 2>&1; then
+    rm -rf "$BUILD/actool" && mkdir -p "$BUILD/actool"
+    xcrun actool "$ROOT/app/AppIcon.icon" --compile "$BUILD/actool" --platform macosx \
+        --minimum-deployment-target $MINOS --app-icon AppIcon --target-device mac \
+        --output-partial-info-plist "$BUILD/actool/partial.plist" >/dev/null
+    cp "$BUILD/actool/Assets.car" "$BUILD/actool/AppIcon.icns" "$APP/Contents/Resources/"
+    /usr/libexec/PlistBuddy -c "Add :CFBundleIconName string AppIcon" "$APP/Contents/Info.plist"
+else
+    say "actool not found (no Xcode): using the plain light icon"
+    cp "$ROOT/app/AppIcon.icns" "$APP/Contents/Resources/"
+fi
 
 mnt=$(mktemp -d)
 hdiutil attach -nobrowse -readonly -mountpoint "$mnt" "$mf" >/dev/null

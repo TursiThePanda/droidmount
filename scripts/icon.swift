@@ -111,9 +111,20 @@ func render(_ variant: String) -> NSImage {
     return img
 }
 
+/// Writes exactly size × size pixels at 72 dpi (lockFocus on a Retina Mac would give 2x,
+/// which Icon Composer then reads as a twice-as-large layer).
 func savePNG(_ img: NSImage, _ url: URL) {
-    guard let tiff = img.tiffRepresentation, let rep = NSBitmapImageRep(data: tiff),
-          let png = rep.representation(using: .png, properties: [:]) else { return }
+    let w = Int(img.size.width), h = Int(img.size.height)
+    guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: w, pixelsHigh: h,
+                                     bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
+                                     isPlanar: false, colorSpaceName: .deviceRGB,
+                                     bytesPerRow: 0, bitsPerPixel: 0) else { return }
+    rep.size = img.size
+    NSGraphicsContext.saveGraphicsState()
+    NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+    img.draw(in: NSRect(origin: .zero, size: img.size))
+    NSGraphicsContext.restoreGraphicsState()
+    guard let png = rep.representation(using: .png, properties: [:]) else { return }
     try? png.write(to: url)
 }
 

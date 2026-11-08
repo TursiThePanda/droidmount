@@ -1,0 +1,63 @@
+{
+  "fill" : {
+    "automatic-gradient" : "extended-srgb:0.93000,0.94000,0.96000,1.00000"
+  },
+  "fill-specializations" : [
+    {
+      "value" : {
+        "automatic-gradient" : "extended-srgb:0.93000,0.94000,0.96000,1.00000"
+      }
+    },
+    {
+      "appearance" : "dark",
+      "value" : {
+        "automatic-gradient" : "extended-srgb:0.16000,0.17000,0.19000,1.00000"
+      }
+    }
+  ],
+  "groups" : [
+    {
+      "layers" : [
+        {
+          "image-name" : "apple.png",
+          "name" : "apple",
+          "glass" : false
+        },
+        {
+          "image-name" : "droid.png",
+          "name" : "droid",
+          "glass" : false
+        },
+        {
+          "image-name" : "cable.png",
+          "name" : "cable",
+          "glass" : false,
+          "fill-specializations" : [
+            {
+              "value" : {
+                "solid" : "extended-srgb:0.28000,0.31000,0.35000,1.00000"
+              }
+            },
+            {
+              "appearance" : "dark",
+              "value" : {
+                "solid" : "extended-srgb:0.92000,0.92000,0.92000,1.00000"
+              }
+            }
+          ]
+        }
+      ],
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : false,
+        "value" : 0.5
+      }
+    }
+  ],
+  "supported-platforms" : {
+    "squares" : "shared"
+  }
+}
