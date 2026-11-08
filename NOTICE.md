@@ -21,3 +21,9 @@ Fleischer and is NOT covered by Droidmount's licence; its own licence is in
 `Droidmount.app/Contents/Resources/macFUSE-LICENSE.txt`. Note its clause 4:
 redistribution bundled with commercial software requires the author's written
 permission. https://macfuse.github.io/
+
+## Android robot (app icon)
+The Android robot is reproduced or modified from work created and shared by Google and
+used according to terms described in the Creative Commons 3.0 Attribution License.
+Android is a trademark of Google LLC. Droidmount is not affiliated with or endorsed by
+Google.

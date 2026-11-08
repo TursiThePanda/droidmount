@@ -117,14 +117,102 @@ func savePNG(_ img: NSImage, _ url: URL) {
     try? png.write(to: url)
 }
 
+// The Android robot is reproduced or modified from work created and shared by Google and
+// used according to terms described in the Creative Commons 3.0 Attribution License.
+let droidGreen = NSColor(srgbRed: 0x3D / 255.0, green: 0xDC / 255.0, blue: 0x84 / 255.0, alpha: 1)
+
+/// Android robot head: half disc, two antennas, two eyes. `base` is the middle of its
+/// flat bottom edge.
+func droidHead(base: NSPoint, width w: CGFloat, color: NSColor, eyes: NSColor) {
+    let r = w / 2
+    let head = NSBezierPath()
+    head.move(to: NSPoint(x: base.x - r, y: base.y))
+    head.appendArc(withCenter: base, radius: r, startAngle: 180, endAngle: 0, clockwise: true)
+    head.close()
+    color.setFill()
+    head.fill()
+    // antennas, rounded strokes leaning outwards
+    let antenna = NSBezierPath()
+    antenna.lineWidth = w * 0.045
+    antenna.lineCapStyle = .round
+    for side: CGFloat in [-1, 1] {
+        let a0 = NSPoint(x: base.x + side * r * 0.42, y: base.y + r * 0.86)
+        let a1 = NSPoint(x: base.x + side * r * 0.66, y: base.y + r * 1.22)
+        antenna.move(to: a0)
+        antenna.line(to: a1)
+    }
+    color.setStroke()
+    antenna.stroke()
+    eyes.setFill()
+    let e = w * 0.085
+    for side: CGFloat in [-1, 1] {
+        NSBezierPath(ovalIn: NSRect(x: base.x + side * r * 0.42 - e / 2, y: base.y + r * 0.42,
+                                    width: e, height: e)).fill()
+    }
+}
+
+func renderDroid(_ variant: String) -> NSImage {
+    let img = NSImage(size: NSSize(width: size, height: size))
+    img.lockFocus()
+    let shadow = NSShadow()
+    shadow.shadowColor = NSColor.black.withAlphaComponent(0.28)
+    shadow.shadowOffset = NSSize(width: 0, height: -12)
+    shadow.shadowBlurRadius = 26
+    switch variant {
+    case "d":
+        // dark squircle, the robot sitting on a white external drive
+        squircle(NSColor(srgbRed: 0.20, green: 0.22, blue: 0.25, alpha: 1),
+                 NSColor(srgbRed: 0.06, green: 0.07, blue: 0.08, alpha: 1))
+        NSGraphicsContext.saveGraphicsState()
+        shadow.set()
+        let drive = NSRect(x: 222, y: 250, width: 580, height: 230)
+        NSColor(white: 0.95, alpha: 1).setFill()
+        NSBezierPath(roundedRect: drive, xRadius: 60, yRadius: 60).fill()
+        NSGraphicsContext.restoreGraphicsState()
+        droidGreen.setFill()
+        NSBezierPath(ovalIn: NSRect(x: 690, y: 345, width: 40, height: 40)).fill() // activity light
+        NSColor(white: 0.80, alpha: 1).setFill()
+        NSBezierPath(roundedRect: NSRect(x: 290, y: 352, width: 300, height: 26), xRadius: 13, yRadius: 13).fill()
+        droidHead(base: NSPoint(x: 512, y: 500), width: 400, color: droidGreen, eyes: NSColor(white: 0.1, alpha: 1))
+    case "e":
+        // Finder blue: the robot peeking over a folder
+        squircle(NSColor(srgbRed: 0.40, green: 0.75, blue: 1.00, alpha: 1),
+                 NSColor(srgbRed: 0.10, green: 0.42, blue: 0.86, alpha: 1))
+        droidHead(base: NSPoint(x: 512, y: 520), width: 420, color: droidGreen, eyes: .white)
+        NSGraphicsContext.saveGraphicsState()
+        shadow.set()
+        if let folder = symbol("folder.fill", pointSize: 470, weight: .regular,
+                               color: NSColor(white: 0.97, alpha: 1)) {
+            drawCentered(folder, center: NSPoint(x: 512, y: 380))
+        }
+        NSGraphicsContext.restoreGraphicsState()
+    default:
+        // Android green squircle, white robot on a USB-C plug
+        squircle(NSColor(srgbRed: 0.45, green: 0.90, blue: 0.60, alpha: 1),
+                 NSColor(srgbRed: 0.10, green: 0.62, blue: 0.36, alpha: 1))
+        NSGraphicsContext.saveGraphicsState()
+        shadow.set()
+        NSColor.white.setFill()
+        NSBezierPath(roundedRect: NSRect(x: 412, y: 300, width: 200, height: 190), xRadius: 40, yRadius: 40).fill()
+        NSBezierPath(roundedRect: NSRect(x: 462, y: 170, width: 100, height: 150), xRadius: 22, yRadius: 22).fill()
+        droidHead(base: NSPoint(x: 512, y: 520), width: 420, color: .white,
+                  eyes: NSColor(srgbRed: 0.10, green: 0.55, blue: 0.32, alpha: 1))
+        NSGraphicsContext.restoreGraphicsState()
+        NSColor(srgbRed: 0.10, green: 0.55, blue: 0.32, alpha: 1).setFill()
+        NSBezierPath(roundedRect: NSRect(x: 482, y: 200, width: 60, height: 18), xRadius: 9, yRadius: 9).fill()
+    }
+    img.unlockFocus()
+    return img
+}
+
 let args = CommandLine.arguments
 let out = URL(fileURLWithPath: args.count > 1 ? args[1] : ".")
 try? FileManager.default.createDirectory(at: out, withIntermediateDirectories: true)
-let which = args.count > 2 ? args[2] : "all"
-let variants = which == "all" ? ["a", "b", "c"] : [which]
+let which = args.count > 2 ? args[2] : "droid"
+let variants = which == "all" ? ["a", "b", "c"] : which == "droid" ? ["d", "e", "f"] : [which]
 var rendered: [NSImage] = []
 for v in variants {
-    let img = render(v)
+    let img = ["d", "e", "f"].contains(v) ? renderDroid(v) : render(v)
     rendered.append(img)
     savePNG(img, out.appendingPathComponent("icon-\(v).png"))
 }
@@ -139,10 +227,10 @@ if rendered.count > 1 {
     for (i, img) in rendered.enumerated() {
         let x = pad + CGFloat(i) * (tile + pad)
         img.draw(in: NSRect(x: x, y: 110, width: tile, height: tile))
-        let label = ["A", "B", "C"][i] as NSString
+        let label = variants[i].uppercased() as NSString
         label.draw(at: NSPoint(x: x + tile / 2 - 20, y: 30),
                    withAttributes: [.font: NSFont.boldSystemFont(ofSize: 64), .foregroundColor: NSColor.darkGray])
     }
     sheet.unlockFocus()
-    savePNG(sheet, out.appendingPathComponent("icon-candidates.png"))
+    savePNG(sheet, out.appendingPathComponent("icon-candidates-\(which).png"))
 }
