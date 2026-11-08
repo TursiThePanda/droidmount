@@ -1,0 +1,26 @@
+Droidmount — first launch
+=========================
+
+1. Drag Droidmount to the Applications folder.
+
+2. Open it. Droidmount is free and not signed with a paid Apple developer certificate,
+   so the first time macOS refuses to open it:
+     - open System Settings > Privacy & Security,
+     - scroll down to "Droidmount was blocked…" and click "Open Anyway",
+     - confirm with your password or Touch ID.
+   This is needed only once.
+
+3. Droidmount opens its setup window and guides you through the rest:
+     - installing macFUSE (included; asks for your password once),
+     - allowing the macFUSE file system extension in System Settings,
+     - starting Droidmount at login.
+   Each step ticks off by itself when it is done.
+
+4. Plug in your phone and choose "File transfer" in the phone's USB notification.
+   The phone appears in Finder (and on the desktop) like a USB drive.
+
+Files you copy to the phone are sent when the copy finishes. If sending ever fails,
+nothing is lost: the file is kept in "Unsent files" (Droidmount menu) and you get a
+notification.
+
+Source code and help: https://github.com/TursiThePanda/droidmount
