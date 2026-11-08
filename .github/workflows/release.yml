@@ -2,7 +2,7 @@
 #
 # Release: bump VERSION, add docs/release-notes/<version>.md, commit, then
 #   git tag -a v<version> -m "Droidmount <version>" && git push origin main --follow-tags
-# The workflow creates the release (pre-release) if it does not exist yet and uploads
+# The workflow creates the release if it does not exist yet and uploads
 # Droidmount-<version>.dmg and its .sha256. Afterwards update the Homebrew cask
 # (TursiThePanda/homebrew-tap, Casks/droidmount.rb: version + sha256).
 name: Release
@@ -66,6 +66,6 @@ jobs:
         run: |
           if ! gh release view "$TAG" >/dev/null 2>&1; then
             gh release create "$TAG" --title "Droidmount ${TAG#v}" \
-              --notes-file "docs/release-notes/${TAG#v}.md" --prerelease --verify-tag
+              --notes-file "docs/release-notes/${TAG#v}.md" --verify-tag
           fi
           gh release upload "$TAG" "build/Droidmount-${TAG#v}.dmg" "build/Droidmount-${TAG#v}.dmg.sha256" --clobber
