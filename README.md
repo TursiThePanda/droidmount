@@ -32,6 +32,18 @@ Silicon.
 Droidmount lives in the menu bar: phone status, *Open in Finder*, *Eject*, a *Read-only*
 switch, *Start at login*.
 
+### Or with Homebrew
+
+```sh
+brew tap tursithepanda/tap
+brew trust --cask tursithepanda/tap/droidmount   # Homebrew asks you to trust third-party casks once
+brew install --cask tursithepanda/tap/droidmount
+```
+
+This installs macFUSE as well. The *Open Anyway* step and enabling the macFUSE extension
+(steps 2 and 3 above) are still needed. Droidmount is not in Homebrew's main repository,
+which only accepts apps signed with a paid Apple developer account.
+
 ## Good to know
 
 - **Copying to the phone is safe.** A file is sent when the copy finishes, under a
@@ -79,6 +91,12 @@ scripts/build.sh      # -> build/Droidmount.app and build/Droidmount-<version>.d
 The script downloads libusb and libmtp (checksums verified), builds them for macOS 26,
 links them statically, compiles the app and the layered icon, bundles the signed macFUSE
 installer and makes the DMG.
+
+Releases are built by GitHub Actions (`.github/workflows/release.yml`, macOS 27 /
+Xcode 27 runner): bump `VERSION`, add `docs/release-notes/<version>.md`, commit, then
+`git tag -a v<version> -m "Droidmount <version>" && git push origin main --follow-tags`.
+The workflow builds the DMG and attaches it to the release; then update `version` and
+`sha256` in the [Homebrew cask](https://github.com/TursiThePanda/homebrew-tap).
 
 `tests/` holds the benchmarks and the read-write tests. The write tests refuse to run
 unless exactly one phone is connected, work only inside their own `MTPFS_TEST` folder,
