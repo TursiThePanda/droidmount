@@ -1,0 +1,57 @@
+# Builds Droidmount on GitHub's macOS runner and attaches the DMG to the release.
+#
+# Release: bump VERSION, add docs/release-notes/<version>.md, commit, then
+#   git tag -a v<version> -m "Droidmount <version>" && git push origin main --follow-tags
+# The workflow creates the release (pre-release) if it does not exist yet and uploads
+# Droidmount-<version>.dmg and its .sha256. Afterwards update the Homebrew cask
+# (TursiThePanda/homebrew-tap, Casks/droidmount.rb: version + sha256).
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to build and attach (e.g. v0.1.1)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    # macOS 27 + Xcode 27 on Apple Silicon; Xcode's actool compiles the layered icon
+    runs-on: xcode-27
+    env:
+      TAG: ${{ github.event.inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+          fetch-depth: 0 # the build number is the commit count
+
+      - name: Version matches the tag
+        run: |
+          v="v$(cat VERSION)"
+          if [ "$v" != "$TAG" ]; then echo "VERSION says $v but the tag is $TAG"; exit 1; fi
+          test -f "docs/release-notes/${TAG#v}.md" || { echo "missing docs/release-notes/${TAG#v}.md"; exit 1; }
+
+      - name: Build tools and macFUSE (headers and libfuse3 for linking)
+        run: |
+          brew install cmake pkg-config
+          brew install --cask macfuse
+
+      - name: Build
+        run: scripts/build.sh
+
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --title "Droidmount ${TAG#v}" \
+              --notes-file "docs/release-notes/${TAG#v}.md" --prerelease --verify-tag
+          fi
+          gh release upload "$TAG" "build/Droidmount-${TAG#v}.dmg" "build/Droidmount-${TAG#v}.dmg.sha256" --clobber
+          cat "build/Droidmount-${TAG#v}.dmg.sha256" >> "$GITHUB_STEP_SUMMARY"
