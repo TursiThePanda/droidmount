@@ -372,6 +372,15 @@ func renderWaveLeft(_ variant: String) -> NSImage {
         squircle(NSColor(srgbRed: 0.97, green: 0.97, blue: 0.98, alpha: 1),
                  NSColor(srgbRed: 0.80, green: 0.84, blue: 0.89, alpha: 1))
     }
+    // Content safe area: keep everything ~100 px inside the 824 px squircle on all sides
+    // (Apple's macOS icon grid). The drawing below spans x 175...900, y 262...845; scale
+    // it by 0.88 around its own centre and put that centre on the icon's centre.
+    NSGraphicsContext.saveGraphicsState()
+    let fit = NSAffineTransform()
+    fit.translateX(by: 512, yBy: 512)
+    fit.scale(by: 0.88)
+    fit.translateX(by: -537.5, yBy: -553.5)
+    fit.concat()
     let shadow = NSShadow()
     shadow.shadowColor = NSColor.black.withAlphaComponent(dark ? 0.45 : 0.22)
     shadow.shadowOffset = NSSize(width: 0, height: -10)
@@ -405,6 +414,7 @@ func renderWaveLeft(_ variant: String) -> NSImage {
     droidHead(base: NSPoint(x: 780, y: 262), width: 240, color: droidGreen,
               eyes: dark ? NSColor(white: 0.1, alpha: 1) : .white)
     apple(center: NSPoint(x: 290, y: 716), size: 240)
+    NSGraphicsContext.restoreGraphicsState()
     NSGraphicsContext.restoreGraphicsState()
     img.unlockFocus()
     return img
