@@ -10,7 +10,7 @@ set -euo pipefail
 
 ROOT=${0:A:h:h}
 BUILD=$ROOT/build
-VERSION=$(<"$ROOT/VERSION")
+VERSION=${DROIDMOUNT_VERSION:-$(<"$ROOT/VERSION")}   # override only for update tests
 ARCH=arm64
 
 LIBUSB_VER=1.0.30
@@ -20,6 +20,11 @@ LIBUSB_SHA256=fea36f34f9156400209595e300840767ab1a385ede1dc7ee893015aea9c6dbaf
 LIBMTP_VER=1.1.23
 LIBMTP_URL=https://downloads.sourceforge.net/project/libmtp/libmtp/$LIBMTP_VER/libmtp-$LIBMTP_VER.tar.gz
 LIBMTP_SHA256=74a2b6e8cb4a0304e95b995496ea3ac644c29371649b892b856e22f12a0bdeed
+
+SPARKLE_VER=2.10.1
+SPARKLE_SHA256=1a856d2a9edb8e628de88121d7be04cf0e2167f8641650b78fca00b14244cf27
+# Update feed; tests point it at a local server with DROIDMOUNT_FEED_URL.
+FEED_URL=${DROIDMOUNT_FEED_URL:-https://github.com/TursiThePanda/droidmount/releases/latest/download/appcast.xml}
 
 MACFUSE_VER=5.5.0
 MACFUSE_DMG=macfuse-$MACFUSE_VER.dmg
@@ -75,9 +80,22 @@ cc -O2 -Wall -mmacosx-version-min=26.0 -o "$BUILD/bin/android-automount" \
 cc -O2 -Wall -mmacosx-version-min=26.0 -o "$BUILD/bin/fskit-probe" "$ROOT/probe/fskit-probe.c" \
     -I/usr/local/include/fuse3 -L/usr/local/lib -lfuse3
 
+# --- Sparkle (update framework) -----------------------------------------------------
+SPK=$BUILD/sparkle
+if [[ ! -d "$SPK/Sparkle.framework" ]]; then
+    say "Sparkle $SPARKLE_VER"
+    txz=$BUILD/downloads/Sparkle-$SPARKLE_VER.tar.xz
+    [[ -f $txz ]] || curl -fsSL -o "$txz" \
+        "https://github.com/sparkle-project/Sparkle/releases/download/$SPARKLE_VER/Sparkle-$SPARKLE_VER.tar.xz"
+    sha_ok "$txz" $SPARKLE_SHA256 || die "Sparkle checksum mismatch"
+    rm -rf "$SPK" && mkdir -p "$SPK"
+    tar -xJf "$txz" -C "$SPK"
+fi
+
 # --- app ----------------------------------------------------------------------------
 say "Droidmount app"
 swiftc -O -parse-as-library -target $ARCH-apple-macos26.0 "$ROOT"/app/Sources/*.swift \
+    -F "$SPK" -framework Sparkle -Xlinker -rpath -Xlinker @executable_path/../Frameworks \
     -o "$BUILD/bin/Droidmount"
 
 # --- macFUSE installer (bundled; its licence allows this for non-commercial software) --
@@ -97,10 +115,11 @@ fi
 say "Droidmount.app"
 APP=$BUILD/Droidmount.app
 rm -rf "$APP"
-mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Helpers" "$APP/Contents/Resources"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Helpers" "$APP/Contents/Resources" "$APP/Contents/Frameworks"
+ditto "$SPK/Sparkle.framework" "$APP/Contents/Frameworks/Sparkle.framework"
 cp "$BUILD/bin/Droidmount" "$APP/Contents/MacOS/"
 cp "$BUILD/fs/simple-mtpfs" "$BUILD/bin/android-automount" "$BUILD/bin/fskit-probe" "$APP/Contents/Helpers/"
-sed "s/@VERSION@/$VERSION/g" "$ROOT/app/Info.plist" > "$APP/Contents/Info.plist"
+sed -e "s/@VERSION@/$VERSION/g" -e "s|@FEED_URL@|$FEED_URL|g" "$ROOT/app/Info.plist" > "$APP/Contents/Info.plist"
 # a build number that grows with every commit, so macOS re-reads the icon (it caches icons
 # per bundle id and version)
 BUILDNUM=$(git -C "$ROOT" rev-list --count HEAD 2>/dev/null || echo 0)
@@ -132,7 +151,10 @@ cp "$ROOT/LICENSE" "$ROOT/NOTICE.md" "$APP/Contents/Resources/"
 # Extended attributes (quarantine, provenance) make codesign refuse the bundle.
 xattr -cr "$APP"
 codesign --force --sign - "$APP/Contents/Helpers/"* >/dev/null
-codesign --force --sign - "$APP" >/dev/null
+# Sparkle checks that an update is signed "the same" as the running app. An ad-hoc
+# signature's default requirement is the cdhash, which changes with every build, so pin
+# the requirement to the bundle identifier instead.
+codesign --force --sign - -r='designated => identifier "io.github.tursithepanda.droidmount"' "$APP" >/dev/null
 
 # --- DMG ----------------------------------------------------------------------------
 say "DMG"

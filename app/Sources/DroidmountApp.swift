@@ -11,7 +11,7 @@ struct DroidmountApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            MenuContent(watcher: delegate.watcher, setup: delegate.setup)
+            MenuContent(watcher: delegate.watcher, setup: delegate.setup, updater: delegate.updater)
         } label: {
             MenuIcon(watcher: delegate.watcher, setup: delegate.setup)
         }
@@ -28,6 +28,7 @@ struct DroidmountApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let watcher = Watcher()
     let setup = Setup()
+    let updater = Updater()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
@@ -91,6 +92,7 @@ struct MenuIcon: View {
 struct MenuContent: View {
     @ObservedObject var watcher: Watcher
     @ObservedObject var setup: Setup
+    @ObservedObject var updater: Updater
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
@@ -113,6 +115,8 @@ struct MenuContent: View {
             }
         }
         Divider()
+        Button("Check for Updates…") { updater.checkForUpdates() }
+            .disabled(!updater.canCheck)
         Button("Setup…") { showSetup() }
         Button("Show log") { NSWorkspace.shared.open(Watcher.logURL) }
         Button("About Droidmount") {

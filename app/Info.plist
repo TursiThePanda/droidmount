@@ -13,5 +13,10 @@
     <key>LSMinimumSystemVersion</key><string>26.0</string>
     <key>LSUIElement</key><true/>
     <key>NSHumanReadableCopyright</key><string>GPL-2.0-or-later. Android phones as Finder disks.</string>
+    <!-- Sparkle updates: the feed is the appcast attached to the latest GitHub release;
+         every update must be signed with the EdDSA key whose public half is below. -->
+    <key>SUFeedURL</key><string>@FEED_URL@</string>
+    <key>SUPublicEDKey</key><string>McNraJycsHmaiD4WKED1L8A+BO45C01UOiL/qSejI6k=</string>
+    <key>SUScheduledCheckInterval</key><integer>86400</integer>
 </dict>
 </plist>
