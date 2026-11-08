@@ -31,6 +31,8 @@ final class Watcher: ObservableObject {
     private var process: Process?
     private var buffer = Data()
     private var stopping = false
+    private var stopInProgress = false
+    private var stopWaiters: [() -> Void] = []
 
     init() {
         readOnly = UserDefaults.standard.bool(forKey: "readOnly")
@@ -58,8 +60,8 @@ final class Watcher: ObservableObject {
             let data = h.availableData
             Task { @MainActor in self?.consume(data) }
         }
-        p.terminationHandler = { [weak self] _ in
-            Task { @MainActor in self?.helperEnded() }
+        p.terminationHandler = { [weak self] ended in
+            Task { @MainActor in self?.helperEnded(ended) }
         }
         do {
             try p.run()
@@ -70,19 +72,42 @@ final class Watcher: ObservableObject {
         }
     }
 
-    /// Unmounts (the helper does it on SIGTERM) and stops.
-    func stop() {
+    var isRunning: Bool { process?.isRunning ?? false }
+
+    /// Unmounts (the helper does it on SIGTERM) and stops. Never blocks the main thread:
+    /// waiting with waitUntilExit() on the main thread hung the app on Quit (the exit of
+    /// the helper was never noticed), so completion runs once the helper has gone - or
+    /// after 10 s, when it is killed outright.
+    func stop(then completion: (() -> Void)? = nil) {
         stopping = true
-        process?.terminate()
-        process?.waitUntilExit()
+        if let completion { stopWaiters.append(completion) }
+        guard let p = process, p.isRunning else {
+            finishStop()
+            return
+        }
+        guard !stopInProgress else { return }
+        stopInProgress = true
+        let pid = p.processIdentifier
+        p.terminate()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in
+            guard let self, self.stopInProgress, self.process === p else { return }
+            kill(pid, SIGKILL)
+            self.finishStop()
+        }
+    }
+
+    private func finishStop() {
+        stopInProgress = false
         process = nil
         phase = .stopped
+        let waiters = stopWaiters
+        stopWaiters = []
+        waiters.forEach { $0() }
     }
 
     func restart() {
         guard process != nil else { return }
-        stop()
-        start()
+        stop { [weak self] in self?.start() }
     }
 
     func eject() {
@@ -163,10 +188,14 @@ final class Watcher: ObservableObject {
         }
     }
 
-    private func helperEnded() {
-        process = nil
-        if stopping { return }
+    private func helperEnded(_ ended: Process) {
+        guard process === ended else { return } // a late notice about an earlier helper
+        if stopping {
+            finishStop()
+            return
+        }
         // crashed or killed: come back after a moment
+        process = nil
         phase = .noPhone
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in self?.start() }
     }

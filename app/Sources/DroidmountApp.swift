@@ -42,8 +42,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    func applicationWillTerminate(_ notification: Notification) {
-        watcher.stop() // unmounts the phone
+    /// Unmount the phone before quitting, without blocking the main thread: macOS waits
+    /// until reply(toApplicationShouldTerminate:) (at most ~10 s, see Watcher.stop).
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard watcher.isRunning else { return .terminateNow }
+        watcher.stop { NSApp.reply(toApplicationShouldTerminate: true) }
+        return .terminateLater
     }
 
     func openSetup() {
