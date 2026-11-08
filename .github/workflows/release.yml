@@ -33,7 +33,7 @@ jobs:
     env:
       TAG: ${{ github.event.inputs.tag || github.ref_name }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ env.TAG }}
           fetch-depth: 0 # the build number is the commit count
@@ -78,7 +78,7 @@ jobs:
 
       - name: Keep the DMG as a run artifact (trial run)
         if: github.event_name == 'workflow_dispatch' && !inputs.publish
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: Droidmount-${{ env.TAG }}
           path: |
