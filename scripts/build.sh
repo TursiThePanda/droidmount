@@ -144,5 +144,6 @@ dmg=$BUILD/Droidmount-$VERSION.dmg
 rm -f "$dmg"
 hdiutil create -volname "Droidmount $VERSION" -srcfolder "$stage" -format UDZO -ov "$dmg" >/dev/null
 rm -rf "$stage"
-shasum -a 256 "$dmg" | tee "$dmg.sha256"
+# checksum file names only the file (no local path)
+(cd "$BUILD" && shasum -a 256 "${dmg:t}" | tee "${dmg:t}.sha256")
 say "done: $dmg"
