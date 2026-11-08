@@ -55,7 +55,11 @@ final class Watcher: ObservableObject {
 
         let out = Pipe()
         p.standardOutput = out
-        p.standardError = FileHandle(forWritingAtPath: Self.logURL.path) ?? FileHandle.nullDevice
+        // O_APPEND: FileHandle(forWritingAtPath:) starts at offset 0, so every launch
+        // overwrote the start of the log and left older runs' lines behind it.
+        let logFD = open(Self.logURL.path, O_WRONLY | O_APPEND | O_CREAT, 0o644)
+        p.standardError = logFD >= 0 ? FileHandle(fileDescriptor: logFD, closeOnDealloc: true)
+                                     : FileHandle.nullDevice
         out.fileHandleForReading.readabilityHandler = { [weak self] h in
             let data = h.availableData
             Task { @MainActor in self?.consume(data) }
@@ -121,16 +125,8 @@ final class Watcher: ObservableObject {
     }
 
     static var logURL: URL {
-        let logs = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs")
-        let url = logs.appendingPathComponent("Droidmount.log")
-        if !FileManager.default.fileExists(atPath: url.path) {
-            FileManager.default.createFile(atPath: url.path, contents: nil)
-        }
-        if let h = FileHandle(forWritingAtPath: url.path) {
-            h.seekToEndOfFile()
-            try? h.close()
-        }
-        return url
+        FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Logs/Droidmount.log")
     }
 
     // MARK: - events from the helper

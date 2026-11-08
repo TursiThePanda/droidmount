@@ -40,6 +40,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/mount.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <time.h>
@@ -52,6 +53,7 @@ extern char **environ;
 #define RETRY_SECONDS 5.0
 #define SETTLE_SECONDS 2.0   /* let the device finish enumerating */
 #define FILETRANSFER_HINT_SECONDS 5.0
+#define REENUM_SECONDS 5.0   /* a phone resetting its USB right after an eject */
 
 static const char *g_fs_bin;
 static const char *g_extra_opts = ""; /* read-write unless "ro" is passed */
@@ -64,6 +66,12 @@ static int g_attempts = 0;
 static int g_mounted = 0;
 static int g_ejected = 0;          /* user ejected: no remount until the phone comes back */
 static int g_unlock_hinted = 0;
+static uint64_t g_loc = 0;          /* USB locationID (port) of the phone we serve */
+/* Closing the MTP session makes some phones (Pixel) drop off USB and come straight back.
+ * After an eject that must not count as plugging in again, or the phone is remounted. */
+static CFAbsoluteTime g_eject_time = 0;
+static uint64_t g_reenum_loc = 0;
+static CFAbsoluteTime g_reenum_until = 0;
 static CFAbsoluteTime g_next_try = 0;
 static volatile sig_atomic_t g_eject_requested = 0;
 static volatile sig_atomic_t g_quit_requested = 0;
@@ -110,16 +118,38 @@ static int run_wait(char *const argv[])
     return status;
 }
 
+/* Is something mounted at mp? Read from the kernel's mount table (MNT_NOWAIT: no request
+ * reaches any file system). A stat() of the mount point would be a request to the phone's
+ * file system, queued in the FSKit module behind Finder's and Quick Look's requests. */
 static int is_mounted(const char *mp)
 {
-    struct stat st_mp, st_parent;
-    char parent[256];
-    if (!mp[0] || stat(mp, &st_mp) != 0)
+    struct statfs *m;
+    if (!mp[0])
         return 0;
-    snprintf(parent, sizeof(parent), "%s/..", mp);
-    if (stat(parent, &st_parent) != 0)
-        return 0;
-    return st_mp.st_dev != st_parent.st_dev;
+    int n = getmntinfo(&m, MNT_NOWAIT);
+    for (int i = 0; i < n; i++)
+        if (strcmp(m[i].f_mntonname, mp) == 0)
+            return 1;
+    return 0;
+}
+
+/* Force-unmount without asking the volume anything first. /sbin/umount resolves the path
+ * with realpath() before it unmounts; that request waits in the FSKit module behind
+ * Finder's and Quick Look's requests until umount gives up after ~10 s ("pthread_cond_
+ * timeout failed; continuing with unmount") - measured 11-17 s with a folder open in
+ * Finder, plugged in or not. unmount(2) itself takes a few milliseconds. */
+static void force_unmount(void)
+{
+    if (!is_mounted(g_mountpoint))
+        return;
+    if (unmount(g_mountpoint, MNT_FORCE) == 0)
+        return;
+    const int err = errno;
+    if (!is_mounted(g_mountpoint))
+        return;
+    logf_("unmount(%s) failed: %s; trying umount -f", g_mountpoint, strerror(err));
+    char *um[] = { "/sbin/umount", "-f", g_mountpoint, NULL };
+    run_wait(um);
 }
 
 static int get_string(io_registry_entry_t e, CFStringRef key, char *buf, size_t len)
@@ -131,6 +161,17 @@ static int get_string(io_registry_entry_t e, CFStringRef key, char *buf, size_t 
     if (v)
         CFRelease(v);
     return ok;
+}
+
+static uint64_t get_u64(io_registry_entry_t e, CFStringRef key)
+{
+    int64_t n = 0;
+    CFTypeRef v = IORegistryEntryCreateCFProperty(e, key, NULL, 0);
+    if (v && CFGetTypeID(v) == CFNumberGetTypeID())
+        CFNumberGetValue((CFNumberRef) v, kCFNumberSInt64Type, &n);
+    if (v)
+        CFRelease(v);
+    return (uint64_t) n;
 }
 
 static int get_int(io_registry_entry_t e, CFStringRef key)
@@ -197,10 +238,7 @@ static void stop_fs(const char *why)
         logf_("%s: unmounting %s (simple-mtpfs pid %d)", why, g_mountpoint, g_child);
     /* Under the FSKit backend libfuse does not unmount when the daemon exits, so unmount
      * first, while the daemon can still answer; the session loop then ends by itself. */
-    if (is_mounted(g_mountpoint)) {
-        char *um[] = { "/sbin/umount", "-f", g_mountpoint, NULL };
-        run_wait(um);
-    }
+    force_unmount();
     if (g_child > 0 && !wait_child(30)) {
         kill(g_child, SIGTERM);
         if (!wait_child(30)) {
@@ -209,10 +247,7 @@ static void stop_fs(const char *why)
             g_child = 0;
         }
     }
-    if (is_mounted(g_mountpoint)) {
-        char *um[] = { "/sbin/umount", "-f", g_mountpoint, NULL };
-        run_wait(um);
-    }
+    force_unmount();
     if (g_mounted) {
         g_mounted = 0;
         event("unmounted %s", g_name);
@@ -233,6 +268,7 @@ static void on_timer(CFRunLoopTimerRef timer, void *info)
         g_eject_requested = 0;
         if (g_intf_id && !g_ejected) {
             g_ejected = 1;
+            g_eject_time = now;
             g_next_try = 0;
             stop_fs("ejected by the user");
             event("ejected %s", g_name);
@@ -254,6 +290,7 @@ static void on_timer(CFRunLoopTimerRef timer, void *info)
                     /* the volume was unmounted (Finder eject) and the daemon ended
                      * normally: respect it until the phone is plugged in again */
                     g_ejected = 1;
+                    g_eject_time = now;
                     g_next_try = 0;
                     logf_("%s ejected in Finder; not remounting until replug", g_mountpoint);
                     event("ejected %s", g_name);
@@ -284,6 +321,7 @@ static void on_timer(CFRunLoopTimerRef timer, void *info)
         logf_("%s was unmounted outside Droidmount; not remounting until replug", g_mountpoint);
         g_mounted = 0;
         g_ejected = 1;
+        g_eject_time = now;
         g_next_try = 0;
         event("unmounted %s", g_name);
         event("ejected %s", g_name);
@@ -325,9 +363,11 @@ static void on_arrival(void *refcon, io_iterator_t it)
 
         io_registry_entry_t dev = 0;
         char product[96] = "", vendor[64] = "";
+        uint64_t loc = 0;
         if (IORegistryEntryGetParentEntry(intf, kIOServicePlane, &dev) == KERN_SUCCESS) {
             get_string(dev, CFSTR(kUSBProductString), product, sizeof(product));
             get_string(dev, CFSTR(kUSBVendorString), vendor, sizeof(vendor));
+            loc = get_u64(dev, CFSTR("locationID"));
             IOObjectRelease(dev);
         }
         IOObjectRelease(intf);
@@ -345,9 +385,23 @@ static void on_arrival(void *refcon, io_iterator_t it)
         g_attempts = 0;
         g_ejected = 0;
         g_unlock_hinted = 0;
+        g_loc = loc;
+        const CFAbsoluteTime now = CFAbsoluteTimeGetCurrent();
+        if (g_reenum_loc && loc == g_reenum_loc && now < g_reenum_until) {
+            /* the same port, moments after an eject: the phone reset its USB when the
+             * MTP session closed. Still ejected until it is really plugged in again. */
+            g_reenum_loc = 0;
+            g_ejected = 1;
+            logf_("%s came back right after the eject (USB reset); staying ejected until "
+                  "it is plugged in again", product);
+            event("plugged %s", g_name);
+            event("ejected %s", g_name);
+            continue;
+        }
+        g_reenum_loc = 0;
         logf_("MTP device plugged in: %s %s (%04x:%04x)", vendor, product, vid, pid);
         event("plugged %s", g_name);
-        g_next_try = CFAbsoluteTimeGetCurrent() + SETTLE_SECONDS;
+        g_next_try = now + SETTLE_SECONDS;
     }
 }
 
@@ -361,6 +415,11 @@ static void on_removal(void *refcon, io_iterator_t it)
         IOObjectRelease(intf);
         if (id && id == g_intf_id) {
             logf_("MTP device gone: %s", g_name);
+            const CFAbsoluteTime now = CFAbsoluteTimeGetCurrent();
+            if (g_ejected && g_loc && now - g_eject_time < REENUM_SECONDS) {
+                g_reenum_loc = g_loc;
+                g_reenum_until = now + REENUM_SECONDS;
+            }
             g_next_try = 0;
             stop_fs("phone unplugged or left File transfer mode");
             event("gone %s", g_name);
