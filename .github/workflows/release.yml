@@ -3,8 +3,11 @@
 # Release: bump VERSION, add docs/release-notes/<version>.md, commit, then
 #   git tag -a v<version> -m "Droidmount <version>" && git push origin main --follow-tags
 # The workflow creates the release if it does not exist yet and uploads
-# Droidmount-<version>.dmg and its .sha256. Afterwards update the Homebrew cask
-# (TursiThePanda/homebrew-tap, Casks/droidmount.rb: version + sha256).
+# Droidmount-<version>.dmg, its .sha256 and appcast.xml - the Sparkle update feed the
+# app reads from the latest release, signed with the EdDSA key in the repository secret
+# SPARKLE_ED_PRIVATE_KEY (its public half is SUPublicEDKey in app/Info.plist).
+# Afterwards update the Homebrew cask (TursiThePanda/homebrew-tap,
+# Casks/droidmount.rb: version + sha256).
 name: Release
 
 on:
@@ -52,12 +55,35 @@ jobs:
       - name: Checksum
         run: cat "build/Droidmount-${TAG#v}.dmg.sha256" >> "$GITHUB_STEP_SUMMARY"
 
+      # Sparkle update feed: sign the DMG with our EdDSA key and describe it in
+      # appcast.xml (with the release notes rendered to HTML for Sparkle's window).
+      - name: Signed update feed (appcast.xml)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+        run: |
+          if [ -z "$SPARKLE_ED_PRIVATE_KEY" ]; then
+            echo "::error::secret SPARKLE_ED_PRIVATE_KEY is not set"; exit 1
+          fi
+          v="${TAG#v}"
+          mkdir -p build/feed
+          cp "build/Droidmount-$v.dmg" build/feed/
+          gh api markdown -f mode=gfm -f text="$(cat "docs/release-notes/$v.md")" > "build/feed/Droidmount-$v.html"
+          printf '%s' "$SPARKLE_ED_PRIVATE_KEY" | build/sparkle/bin/generate_appcast \
+            --ed-key-file - --embed-release-notes \
+            --download-url-prefix "https://github.com/${GITHUB_REPOSITORY}/releases/download/$TAG/" \
+            --link "https://github.com/${GITHUB_REPOSITORY}" \
+            -o build/appcast.xml build/feed
+          grep -q 'sparkle:edSignature=' build/appcast.xml
+
       - name: Keep the DMG as a run artifact (trial run)
         if: github.event_name == 'workflow_dispatch' && !inputs.publish
         uses: actions/upload-artifact@v4
         with:
           name: Droidmount-${{ env.TAG }}
-          path: build/Droidmount-*.dmg*
+          path: |
+            build/Droidmount-*.dmg*
+            build/appcast.xml
 
       - name: Attach to the release
         if: github.event_name == 'push' || inputs.publish
@@ -68,4 +94,5 @@ jobs:
             gh release create "$TAG" --title "Droidmount ${TAG#v}" \
               --notes-file "docs/release-notes/${TAG#v}.md" --verify-tag
           fi
-          gh release upload "$TAG" "build/Droidmount-${TAG#v}.dmg" "build/Droidmount-${TAG#v}.dmg.sha256" --clobber
+          gh release upload "$TAG" "build/Droidmount-${TAG#v}.dmg" "build/Droidmount-${TAG#v}.dmg.sha256" \
+            build/appcast.xml --clobber

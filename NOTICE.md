@@ -22,6 +22,13 @@ Fleischer and is NOT covered by Droidmount's licence; its own licence is in
 redistribution bundled with commercial software requires the author's written
 permission. https://macfuse.github.io/
 
+## Sparkle
+Automatic updates. `Sparkle.framework` 2.10.1 (unmodified, from
+https://github.com/sparkle-project/Sparkle/releases) is included in the app.
+Copyright (c) 2006-2013 Andy Matuschak and the Sparkle contributors. MIT licence; the
+full licence text, including the licences of the code Sparkle itself contains, is in
+`Droidmount.app/Contents/Resources/Sparkle-LICENSE.txt`. https://sparkle-project.org
+
 ## Android robot (app icon)
 The Android robot is reproduced or modified from work created and shared by Google and
 used according to terms described in the Creative Commons 3.0 Attribution License.

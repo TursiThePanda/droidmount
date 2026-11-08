@@ -30,7 +30,12 @@ Silicon.
    notification.
 
 Droidmount lives in the menu bar: phone status, *Open in Finder*, *Eject*, a *Read-only*
-switch, *Start at login*.
+switch, *Start at login*, *Check for Updates…*.
+
+**Updates** come by themselves (from 0.1.1 on): Droidmount asks once whether to check
+automatically, then looks once a day and offers each new version with its release notes.
+Every update is signed, and a download that does not match the signature is refused.
+Version 0.1.0 has no updater yet — install 0.1.1 over it by hand once.
 
 ### Or with Homebrew
 
@@ -95,8 +100,15 @@ installer and makes the DMG.
 Releases are built by GitHub Actions (`.github/workflows/release.yml`, macOS 27 /
 Xcode 27 runner): bump `VERSION`, add `docs/release-notes/<version>.md`, commit, then
 `git tag -a v<version> -m "Droidmount <version>" && git push origin main --follow-tags`.
-The workflow builds the DMG and attaches it to the release; then update `version` and
-`sha256` in the [Homebrew cask](https://github.com/TursiThePanda/homebrew-tap).
+The workflow builds the DMG, signs it for Sparkle and attaches the DMG, its `.sha256`
+and `appcast.xml` (the update feed) to the release; then update `version` and `sha256`
+in the [Homebrew cask](https://github.com/TursiThePanda/homebrew-tap).
+
+Updates are signed with an EdDSA key. Its public half is `SUPublicEDKey` in
+`app/Info.plist`; the private half lives in the maintainer's login Keychain (Sparkle's
+`generate_keys --account droidmount`) and in the repository secret
+`SPARKLE_ED_PRIVATE_KEY`. Losing it means existing installs can no longer verify
+updates, so keep a backup.
 
 `tests/` holds the benchmarks and the read-write tests. The write tests refuse to run
 unless exactly one phone is connected, work only inside their own `MTPFS_TEST` folder,
@@ -110,6 +122,7 @@ and need `--allow-google` before they write to a Google phone.
 - macFUSE by Benjamin Fleischer — its own licence, included in the app; its installer is
   bundled unchanged. Note that macFUSE's licence does not allow bundling it with
   *commercial* software without the author's permission.
+- Sparkle (automatic updates) — MIT licence, included in the app.
 - The Android robot is reproduced or modified from work created and shared by Google and
   used according to terms described in the Creative Commons 3.0 Attribution License.
   Android is a trademark of Google LLC.

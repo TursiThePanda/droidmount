@@ -146,6 +146,7 @@ cp "$mnt/Install macFUSE.pkg" "$APP/Contents/Resources/"
 textutil -convert txt -output "$APP/Contents/Resources/macFUSE-LICENSE.txt" "$mnt/License.rtf"
 hdiutil detach "$mnt" -quiet
 cp "$ROOT/LICENSE" "$ROOT/NOTICE.md" "$APP/Contents/Resources/"
+cp "$SPK/LICENSE" "$APP/Contents/Resources/Sparkle-LICENSE.txt"
 
 # ad-hoc signature (no Apple Developer account); the bundled macFUSE pkg keeps its own.
 # Extended attributes (quarantine, provenance) make codesign refuse the bundle.
