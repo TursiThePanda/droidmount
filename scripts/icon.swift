@@ -476,7 +476,7 @@ let args = CommandLine.arguments
 let out = URL(fileURLWithPath: args.count > 1 ? args[1] : ".")
 try? FileManager.default.createDirectory(at: out, withIntermediateDirectories: true)
 let which = args.count > 2 ? args[2] : "droid"
-let variants = which == "all" ? ["a", "b", "c"] : which == "droid" ? ["d", "e", "f"]
+let variants = which == "layers" ? [] : which == "all" ? ["a", "b", "c"] : which == "droid" ? ["d", "e", "f"]
     : which == "pair" ? ["g", "h", "d", "f"] : which == "corners" ? ["i", "k"] : which == "wave" ? ["l", "m"] : which == "waveleft" ? ["n", "o"] : [which]
 var rendered: [NSImage] = []
 for v in variants {
@@ -505,4 +505,65 @@ if rendered.count > 1 {
     }
     sheet.unlockFocus()
     savePNG(sheet, out.appendingPathComponent("icon-candidates-\(which).png"))
+}
+
+// --- Layers for the Icon Composer (.icon) version: flat artwork on transparent 1024 px
+// canvases. The system draws the background, glass, shadows and the shape mask, and the
+// canvas IS the icon shape, so the 824 px body of the drawings above maps to 1024 px.
+func exportLayers(_ dir: URL) {
+    func layer(_ name: String, _ draw: () -> Void) {
+        let img = NSImage(size: NSSize(width: size, height: size))
+        img.lockFocus()
+        let toCanvas = NSAffineTransform()
+        toCanvas.scale(by: 1024.0 / 824.0)
+        toCanvas.translateX(by: -100, yBy: -100)
+        toCanvas.concat()
+        let fit = NSAffineTransform()             // same safe-area fit as renderWaveLeft
+        fit.translateX(by: 512, yBy: 512)
+        fit.scale(by: 0.88)
+        fit.translateX(by: -537.5, yBy: -553.5)
+        fit.concat()
+        draw()
+        img.unlockFocus()
+        savePNG(img, dir.appendingPathComponent(name))
+    }
+    let r: CGFloat = 106
+    let lowY: CGFloat = 300, midY: CGFloat = 512, highY: CGFloat = 724
+    let leftX: CGFloat = 334, rightX: CGFloat = 694
+    let droidPlugX: CGFloat = 600, applePlugX: CGFloat = 482
+    // cable in plain white: Icon Composer recolours it per appearance
+    layer("cable.png") {
+        let path = NSBezierPath()
+        path.lineWidth = 28
+        path.lineCapStyle = .round
+        path.move(to: NSPoint(x: droidPlugX, y: lowY))
+        path.line(to: NSPoint(x: leftX, y: lowY))
+        path.appendArc(withCenter: NSPoint(x: leftX, y: lowY + r), radius: r, startAngle: 270, endAngle: 90, clockwise: true)
+        path.line(to: NSPoint(x: rightX, y: midY))
+        path.appendArc(withCenter: NSPoint(x: rightX, y: midY + r), radius: r, startAngle: 270, endAngle: 90, clockwise: false)
+        path.line(to: NSPoint(x: applePlugX, y: highY))
+        NSColor.white.setStroke()
+        path.stroke()
+        NSColor.white.setFill()
+        NSBezierPath(roundedRect: NSRect(x: droidPlugX - 14, y: lowY - 26, width: 76, height: 52),
+                     xRadius: 14, yRadius: 14).fill()
+        NSBezierPath(roundedRect: NSRect(x: applePlugX - 78, y: highY - 26, width: 76, height: 52),
+                     xRadius: 14, yRadius: 14).fill()
+    }
+    layer("apple.png") { apple(center: NSPoint(x: 290, y: 716), size: 240) }
+    // robot with see-through eyes, so they take the background colour in every appearance
+    layer("droid.png") {
+        droidHead(base: NSPoint(x: 780, y: 262), width: 240, color: droidGreen, eyes: .clear)
+        NSGraphicsContext.current?.compositingOperation = .clear
+        let w: CGFloat = 240, rr = w / 2, e = w * 0.085
+        for side: CGFloat in [-1, 1] {
+            NSBezierPath(ovalIn: NSRect(x: 780 + side * rr * 0.42 - e / 2, y: 262 + rr * 0.42,
+                                        width: e, height: e)).fill()
+        }
+        NSGraphicsContext.current?.compositingOperation = .sourceOver
+    }
+}
+
+if CommandLine.arguments.count > 2 && CommandLine.arguments[2] == "layers" {
+    exportLayers(URL(fileURLWithPath: CommandLine.arguments[1]))
 }
