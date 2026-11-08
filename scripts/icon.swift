@@ -205,14 +205,169 @@ func renderDroid(_ variant: String) -> NSImage {
     return img
 }
 
+// --- "Mac and Android joined by a cable" (David's idea). Own shapes only: SF Symbols may
+// not be used in app icons, and Apple's logo may not be used at all.
+
+/// USB cable as a smooth S-curve between two points, with plug bodies at both ends.
+func cable(from a: NSPoint, to b: NSPoint, color: NSColor, width: CGFloat) {
+    let path = NSBezierPath()
+    path.lineWidth = width
+    path.lineCapStyle = .round
+    path.move(to: a)
+    path.curve(to: b, controlPoint1: NSPoint(x: a.x + 120, y: a.y - 260),
+               controlPoint2: NSPoint(x: b.x - 120, y: b.y - 260))
+    color.setStroke()
+    path.stroke()
+    color.setFill()
+    for p in [a, b] {
+        NSBezierPath(roundedRect: NSRect(x: p.x - width * 0.9, y: p.y - 10, width: width * 1.8, height: 70),
+                     xRadius: 14, yRadius: 14).fill()
+    }
+}
+
+/// A generic laptop (not Apple's design language: flat, chunky bezel).
+func laptop(center: NSPoint, width w: CGFloat) {
+    let h = w * 0.64
+    let screen = NSRect(x: center.x - w / 2, y: center.y - h / 2 + w * 0.06, width: w, height: h)
+    NSColor(srgbRed: 0.18, green: 0.20, blue: 0.23, alpha: 1).setFill()
+    NSBezierPath(roundedRect: screen, xRadius: w * 0.06, yRadius: w * 0.06).fill()
+    NSColor(srgbRed: 0.55, green: 0.78, blue: 1.0, alpha: 1).setFill()
+    NSBezierPath(roundedRect: screen.insetBy(dx: w * 0.06, dy: w * 0.06), xRadius: w * 0.025, yRadius: w * 0.025).fill()
+    let base = NSBezierPath()
+    let by = screen.minY - w * 0.02
+    base.move(to: NSPoint(x: screen.minX - w * 0.08, y: by - w * 0.07))
+    base.line(to: NSPoint(x: screen.maxX + w * 0.08, y: by - w * 0.07))
+    base.line(to: NSPoint(x: screen.maxX, y: by))
+    base.line(to: NSPoint(x: screen.minX, y: by))
+    base.close()
+    NSColor(white: 0.85, alpha: 1).setFill()
+    base.fill()
+}
+
+/// A plain whole apple fruit (stem, leaf, shallow dimples, no bite) - deliberately not
+/// Apple's logo.
+func apple(center c: NSPoint, size s: CGFloat) {
+    func P(_ x: CGFloat, _ y: CGFloat) -> NSPoint { NSPoint(x: c.x + x * s, y: c.y + y * s) }
+    let fruit = NSBezierPath()
+    fruit.move(to: P(0, 0.30))
+    fruit.curve(to: P(0.48, 0.10), controlPoint1: P(0.14, 0.44), controlPoint2: P(0.46, 0.42))
+    fruit.curve(to: P(0.16, -0.46), controlPoint1: P(0.50, -0.20), controlPoint2: P(0.34, -0.46))
+    fruit.curve(to: P(0, -0.42), controlPoint1: P(0.09, -0.46), controlPoint2: P(0.05, -0.43))
+    fruit.curve(to: P(-0.16, -0.46), controlPoint1: P(-0.05, -0.43), controlPoint2: P(-0.09, -0.46))
+    fruit.curve(to: P(-0.48, 0.10), controlPoint1: P(-0.34, -0.46), controlPoint2: P(-0.50, -0.20))
+    fruit.curve(to: P(0, 0.30), controlPoint1: P(-0.46, 0.42), controlPoint2: P(-0.14, 0.44))
+    fruit.close()
+    NSGradient(starting: NSColor(srgbRed: 1.0, green: 0.40, blue: 0.32, alpha: 1),
+               ending: NSColor(srgbRed: 0.72, green: 0.07, blue: 0.10, alpha: 1))!.draw(in: fruit, angle: -65)
+    // soft highlight
+    NSGraphicsContext.saveGraphicsState()
+    fruit.addClip()
+    NSColor.white.withAlphaComponent(0.18).setFill()
+    NSBezierPath(ovalIn: NSRect(x: c.x - s * 0.36, y: c.y + s * 0.02, width: s * 0.22, height: s * 0.30)).fill()
+    NSGraphicsContext.restoreGraphicsState()
+    let stem = NSBezierPath()
+    stem.lineWidth = s * 0.05
+    stem.lineCapStyle = .round
+    stem.move(to: P(0, 0.28))
+    stem.curve(to: P(0.05, 0.50), controlPoint1: P(0, 0.40), controlPoint2: P(0.02, 0.46))
+    NSColor(srgbRed: 0.40, green: 0.25, blue: 0.15, alpha: 1).setStroke()
+    stem.stroke()
+    let leaf = NSBezierPath(ovalIn: NSRect(x: -s * 0.15, y: -s * 0.065, width: s * 0.30, height: s * 0.13))
+    var t = AffineTransform()
+    t.translate(x: c.x + s * 0.19, y: c.y + s * 0.46)
+    t.rotate(byDegrees: 22)
+    leaf.transform(using: t)
+    NSColor(srgbRed: 0.30, green: 0.70, blue: 0.25, alpha: 1).setFill()
+    leaf.fill()
+}
+
+func renderPair(_ variant: String) -> NSImage {
+    let img = NSImage(size: NSSize(width: size, height: size))
+    img.lockFocus()
+    squircle(NSColor(srgbRed: 0.97, green: 0.97, blue: 0.98, alpha: 1),
+             NSColor(srgbRed: 0.82, green: 0.85, blue: 0.89, alpha: 1))
+    let shadow = NSShadow()
+    shadow.shadowColor = NSColor.black.withAlphaComponent(0.22)
+    shadow.shadowOffset = NSSize(width: 0, height: -10)
+    shadow.shadowBlurRadius = 20
+    cable(from: NSPoint(x: 330, y: 470), to: NSPoint(x: 700, y: 470),
+          color: NSColor(srgbRed: 0.30, green: 0.33, blue: 0.37, alpha: 1), width: 30)
+    NSGraphicsContext.saveGraphicsState()
+    shadow.set()
+    if variant == "g" {
+        laptop(center: NSPoint(x: 330, y: 640), width: 340)
+    } else {
+        apple(center: NSPoint(x: 330, y: 620), size: 330)
+    }
+    droidHead(base: NSPoint(x: 700, y: 540), width: 330, color: droidGreen, eyes: .white)
+    NSGraphicsContext.restoreGraphicsState()
+    img.unlockFocus()
+    return img
+}
+
+/// David's layout: robot in the top-left corner, the Mac side in the bottom-right one, a
+/// cable running down from the robot, through the centre, and down into the other end.
+func renderCorners(_ variant: String) -> NSImage {
+    let img = NSImage(size: NSSize(width: size, height: size))
+    img.lockFocus()
+    let dark = variant == "k"
+    if dark {
+        squircle(NSColor(srgbRed: 0.22, green: 0.24, blue: 0.27, alpha: 1),
+                 NSColor(srgbRed: 0.07, green: 0.08, blue: 0.09, alpha: 1))
+    } else {
+        squircle(NSColor(srgbRed: 0.97, green: 0.97, blue: 0.98, alpha: 1),
+                 NSColor(srgbRed: 0.80, green: 0.84, blue: 0.89, alpha: 1))
+    }
+    let shadow = NSShadow()
+    shadow.shadowColor = NSColor.black.withAlphaComponent(dark ? 0.45 : 0.22)
+    shadow.shadowOffset = NSSize(width: 0, height: -10)
+    shadow.shadowBlurRadius = 20
+
+    let cableColor = dark ? NSColor(white: 0.92, alpha: 1) : NSColor(srgbRed: 0.28, green: 0.31, blue: 0.35, alpha: 1)
+    let appleCenter = NSPoint(x: 668, y: 318)
+    let appleSize: CGFloat = 270
+    let start = NSPoint(x: 340, y: 640)                       // under the robot
+    let mid = NSPoint(x: 512, y: 512)                         // centre of the icon
+    let end = NSPoint(x: appleCenter.x - appleSize * 0.26,    // the apple's left shoulder
+                      y: appleCenter.y + appleSize * 0.38)
+    let path = NSBezierPath()
+    path.lineWidth = 28
+    path.lineCapStyle = .round
+    path.move(to: start)
+    path.curve(to: mid, controlPoint1: NSPoint(x: start.x, y: 530), controlPoint2: NSPoint(x: 410, y: mid.y))
+    path.curve(to: end, controlPoint1: NSPoint(x: 600, y: mid.y), controlPoint2: NSPoint(x: end.x, y: 500))
+    NSGraphicsContext.saveGraphicsState()
+    shadow.set()
+    cableColor.setStroke()
+    path.stroke()
+    cableColor.setFill()
+    NSBezierPath(roundedRect: NSRect(x: start.x - 26, y: start.y - 18, width: 52, height: 72),
+                 xRadius: 14, yRadius: 14).fill()
+    NSBezierPath(roundedRect: NSRect(x: end.x - 26, y: end.y - 6, width: 52, height: 72),
+                 xRadius: 14, yRadius: 14).fill()
+    droidHead(base: NSPoint(x: 340, y: 680), width: 290, color: droidGreen,
+              eyes: dark ? NSColor(white: 0.1, alpha: 1) : .white)
+    if variant == "j" {
+        laptop(center: NSPoint(x: 690, y: 300), width: 290)
+    } else {
+        apple(center: appleCenter, size: appleSize)
+    }
+    NSGraphicsContext.restoreGraphicsState()
+    img.unlockFocus()
+    return img
+}
+
 let args = CommandLine.arguments
 let out = URL(fileURLWithPath: args.count > 1 ? args[1] : ".")
 try? FileManager.default.createDirectory(at: out, withIntermediateDirectories: true)
 let which = args.count > 2 ? args[2] : "droid"
-let variants = which == "all" ? ["a", "b", "c"] : which == "droid" ? ["d", "e", "f"] : [which]
+let variants = which == "all" ? ["a", "b", "c"] : which == "droid" ? ["d", "e", "f"]
+    : which == "pair" ? ["g", "h", "d", "f"] : which == "corners" ? ["i", "k"] : [which]
 var rendered: [NSImage] = []
 for v in variants {
-    let img = ["d", "e", "f"].contains(v) ? renderDroid(v) : render(v)
+    let img = ["d", "e", "f"].contains(v) ? renderDroid(v)
+        : ["g", "h"].contains(v) ? renderPair(v)
+        : ["i", "j", "k"].contains(v) ? renderCorners(v) : render(v)
     rendered.append(img)
     savePNG(img, out.appendingPathComponent("icon-\(v).png"))
 }
