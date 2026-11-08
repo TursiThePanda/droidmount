@@ -13,8 +13,12 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Existing tag to build and attach (e.g. v0.1.1)"
+        description: "Existing tag to build (e.g. v0.1.1)"
         required: true
+      publish:
+        description: "Attach the DMG to the release (off = trial run, DMG kept as a run artifact)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -45,7 +49,18 @@ jobs:
       - name: Build
         run: scripts/build.sh
 
+      - name: Checksum
+        run: cat "build/Droidmount-${TAG#v}.dmg.sha256" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the DMG as a run artifact (trial run)
+        if: github.event_name == 'workflow_dispatch' && !inputs.publish
+        uses: actions/upload-artifact@v4
+        with:
+          name: Droidmount-${{ env.TAG }}
+          path: build/Droidmount-*.dmg*
+
       - name: Attach to the release
+        if: github.event_name == 'push' || inputs.publish
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -54,4 +69,3 @@ jobs:
               --notes-file "docs/release-notes/${TAG#v}.md" --prerelease --verify-tag
           fi
           gh release upload "$TAG" "build/Droidmount-${TAG#v}.dmg" "build/Droidmount-${TAG#v}.dmg.sha256" --clobber
-          cat "build/Droidmount-${TAG#v}.dmg.sha256" >> "$GITHUB_STEP_SUMMARY"
