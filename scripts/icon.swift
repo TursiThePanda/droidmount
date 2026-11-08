@@ -305,6 +305,59 @@ func renderPair(_ variant: String) -> NSImage {
     return img
 }
 
+/// David's sketch (2026-11-08): robot bottom-left, apple top-right, the cable as a wave -
+/// up from the robot, over the top, down through the middle, under the bottom, and up
+/// into the apple.
+func renderWave(_ variant: String) -> NSImage {
+    let img = NSImage(size: NSSize(width: size, height: size))
+    img.lockFocus()
+    let dark = variant == "m"
+    if dark {
+        squircle(NSColor(srgbRed: 0.22, green: 0.24, blue: 0.27, alpha: 1),
+                 NSColor(srgbRed: 0.07, green: 0.08, blue: 0.09, alpha: 1))
+    } else {
+        squircle(NSColor(srgbRed: 0.97, green: 0.97, blue: 0.98, alpha: 1),
+                 NSColor(srgbRed: 0.80, green: 0.84, blue: 0.89, alpha: 1))
+    }
+    let shadow = NSShadow()
+    shadow.shadowColor = NSColor.black.withAlphaComponent(dark ? 0.45 : 0.22)
+    shadow.shadowOffset = NSSize(width: 0, height: -10)
+    shadow.shadowBlurRadius = 20
+    let cableColor = dark ? NSColor(white: 0.92, alpha: 1) : NSColor(srgbRed: 0.28, green: 0.31, blue: 0.35, alpha: 1)
+
+    let droidX: CGFloat = 300, appleX: CGFloat = 724, midX: CGFloat = 512
+    let r = (midX - droidX) / 2                  // radius of both bends
+    let top: CGFloat = 690, bottom: CGFloat = 330
+    let droidPlugTop: CGFloat = 400              // plug sits on the robot's head
+    let applePlugBottom: CGFloat = 560           // plug under the apple
+    let path = NSBezierPath()
+    path.lineWidth = 28
+    path.lineCapStyle = .round
+    path.lineJoinStyle = .round
+    path.move(to: NSPoint(x: droidX, y: droidPlugTop))
+    path.line(to: NSPoint(x: droidX, y: top))
+    path.appendArc(withCenter: NSPoint(x: droidX + r, y: top), radius: r, startAngle: 180, endAngle: 0, clockwise: true)
+    path.line(to: NSPoint(x: midX, y: bottom))
+    path.appendArc(withCenter: NSPoint(x: midX + r, y: bottom), radius: r, startAngle: 180, endAngle: 360, clockwise: false)
+    path.line(to: NSPoint(x: appleX, y: applePlugBottom))
+
+    NSGraphicsContext.saveGraphicsState()
+    shadow.set()
+    cableColor.setStroke()
+    path.stroke()
+    cableColor.setFill()
+    NSBezierPath(roundedRect: NSRect(x: droidX - 26, y: droidPlugTop - 58, width: 52, height: 72),
+                 xRadius: 14, yRadius: 14).fill()
+    NSBezierPath(roundedRect: NSRect(x: appleX - 26, y: applePlugBottom - 14, width: 52, height: 72),
+                 xRadius: 14, yRadius: 14).fill()
+    droidHead(base: NSPoint(x: droidX, y: 200), width: 270, color: droidGreen,
+              eyes: dark ? NSColor(white: 0.1, alpha: 1) : .white)
+    apple(center: NSPoint(x: appleX, y: 735), size: 250)
+    NSGraphicsContext.restoreGraphicsState()
+    img.unlockFocus()
+    return img
+}
+
 /// David's layout: robot in the top-left corner, the Mac side in the bottom-right one, a
 /// cable running down from the robot, through the centre, and down into the other end.
 func renderCorners(_ variant: String) -> NSImage {
@@ -362,12 +415,13 @@ let out = URL(fileURLWithPath: args.count > 1 ? args[1] : ".")
 try? FileManager.default.createDirectory(at: out, withIntermediateDirectories: true)
 let which = args.count > 2 ? args[2] : "droid"
 let variants = which == "all" ? ["a", "b", "c"] : which == "droid" ? ["d", "e", "f"]
-    : which == "pair" ? ["g", "h", "d", "f"] : which == "corners" ? ["i", "k"] : [which]
+    : which == "pair" ? ["g", "h", "d", "f"] : which == "corners" ? ["i", "k"] : which == "wave" ? ["l", "m"] : [which]
 var rendered: [NSImage] = []
 for v in variants {
     let img = ["d", "e", "f"].contains(v) ? renderDroid(v)
         : ["g", "h"].contains(v) ? renderPair(v)
-        : ["i", "j", "k"].contains(v) ? renderCorners(v) : render(v)
+        : ["i", "j", "k"].contains(v) ? renderCorners(v)
+        : ["l", "m"].contains(v) ? renderWave(v) : render(v)
     rendered.append(img)
     savePNG(img, out.appendingPathComponent("icon-\(v).png"))
 }
